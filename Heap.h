@@ -1,6 +1,7 @@
 #pragma once
 #include <stdexcept>
 #include <cstring>
+#include "MutableArraySequence.h"
 
 template <typename T>
 bool isGreater(const T& first, const T& second) {
@@ -16,12 +17,11 @@ template <typename T>
 class Heap {
 
 protected:
-    int size = 0;
-    T* heap = nullptr;
+    MutableArraySequence<T>* heap = nullptr;
 
     // используется в методах для создания массива определенной длины и кучи определенной направленности.
     // protected, потому что используется в PriorityQueue в методе merge
-    Heap(bool isMax, int size): size(size), heap(new T[size]) {
+    Heap(bool isMax, int size): heap(MutableArraySequence<T>(size)) {
         if (isMax == true) chooseHeapType("max");
         else chooseHeapType("min");
     }
@@ -29,8 +29,8 @@ protected:
     // protected, потому что используется в PriorityQueue в методе merge
     void pushUp(int currentIndex) {
         // к примеру, если newElem < topElem && compare = isLess, тогда newElem и topElem меняются местами.
-        while ((currentIndex != 0) && compare(heap[currentIndex], heap[(currentIndex - 1) / 2])) {
-            swap(heap[currentIndex], heap[(currentIndex - 1) / 2]);
+        while ((currentIndex != 0) && compare((*heap)[currentIndex], (*heap)[(currentIndex - 1) / 2])) {
+            swap((*heap)[currentIndex], (*heap)[(currentIndex - 1) / 2]);
             currentIndex = (currentIndex - 1) / 2;
         }
     }
@@ -42,8 +42,8 @@ protected:
         int levelCapacityCurrent = 0;
 
         int index = 1;
-        while (subTreeIndex < size) {
-            result->heap[index++] = heap[subTreeIndex];
+        while (subTreeIndex < heap->getSize()) {
+            result->(*heap)[index++] = (*heap)[subTreeIndex];
             ++levelCapacityCurrent;
             if (levelCapacityCurrent == levelCapacity) {
                 subTreeIndex = (subTreeIndex - levelCapacity + 1) * 2 + 1;
@@ -63,7 +63,7 @@ protected:
         int levelCapacityCurrent = 0; // текущая заполненность уровня поддерева, где рассматривается следующий элемент
 
         // узнаем, сколько элементов содержится в поддереве (чтобы установить определенный размер дерева).
-        while (subTreeIndex < size) { // проверяем, не вышли ли мы за пределы дерева
+        while (subTreeIndex < heap->getSize()) { // проверяем, не вышли ли мы за пределы дерева
             ++subTreeSize;
             ++levelCapacityCurrent;
             if (levelCapacityCurrent == levelCapacity) {
@@ -83,9 +83,9 @@ private:
     // функция, которая зависит от типа кучи - минимальная или максимальная
     bool (*compare) (const T& first, const T& second); // isLess -> arg1 < arg2 ; isGreater -> arg1 > arg2.
 
-    int getPriorityHeritantIndex(int index, T* array) const { // функция для нахождения максимального/минимального ближайшего потомка у узла(maxHeap -> максимального, minHeap -> минимального)
-        if (index + 1 >= size) return index; // в этом случае потомок у узла единственный
-        return compare(array[index], array[index + 1]) ? index : index + 1;
+    int getPriorityHeritantIndex(int index, MutableArraySequence<T>* heap) const { // функция для нахождения максимального/минимального ближайшего потомка у узла(maxHeap -> максимального, minHeap -> минимального)
+        if (index + 1 >= heap->getSize()) return index; // в этом случае потомок у узла единственный
+        return compare((*heap)[index], (*heap)[index + 1]) ? index : index + 1;
     }
 
     void swap(T& first, T& second) {
@@ -97,35 +97,10 @@ private:
     void pushDown() {
         int currentIndex = 0;
         int priorityIndex = getPriorityHeritantIndex(1, heap);
-        while ((currentIndex * 2 + 1 < size) && compare(heap[priorityIndex], heap[currentIndex])) {
-            swap(heap[currentIndex], heap[priorityIndex]);
+        while ((currentIndex * 2 + 1 < heap->getSize()) && compare((*heap)[priorityIndex], (*heap)[currentIndex])) {
+            swap((*heap)[currentIndex], (*heap)[priorityIndex]);
             currentIndex = priorityIndex;
             priorityIndex = getPriorityHeritantIndex(2 * currentIndex + 1, heap);
-        }
-    }
-
-    void increaseSize() {
-        T* bufHeap = new T[size + 1];
-        for (int i = 0; i < size; ++i) {
-            bufHeap[i] = heap[i];
-        }
-        delete[] heap;
-        heap = bufHeap;
-        ++size;
-    }
-
-    void decreaseSize() {
-        if (size == 0) throw std::out_of_range("You tried to decrease size of empty heap.\n");
-        T* bufHeap = new T[size - 1];
-        for (int i = 0; i < size - 1; ++i) {
-            bufHeap[i] = heap[i];
-        }
-        delete[] heap;
-        heap = bufHeap;
-        --size;
-        if (size == 0) {
-            delete[] heap;
-            heap = nullptr;
         }
     }
 
@@ -142,18 +117,16 @@ private:
 
 public:
 
-    Heap(const Heap<T>& other): size(other.size), heap(new T[other.size]) {
+    Heap(const Heap<T>& other): heap(new MutableArraySequence((*other.heap)) {
         compare = other.compare;
-        for (int i = 0; i < other.size; ++i) {
-            heap[i] = other.heap[i];
+        for (int i = 0; i < other->getSize(); ++i) {
+            (*heap)[i] = (*other.heap)[i];
         }
     }
 
-    Heap(char* compareType, T* array, int size): heap(new T[size]) {
+    Heap(char* compareType, T* array, int size): heap(new MutableArraySequence(array, size) {
         chooseHeapType(compareType);
         for (int i = 0; i < size; ++i) {
-            heap[this->size] = array[i];
-            i = this->size++;
             pushUp(i);
         }
     }
@@ -163,24 +136,23 @@ public:
     }
 
     virtual ~Heap() { // в нашем случае можно было сделать и не виртуальный конструктор, т.к. в PriorityQueue поля не добавляются, но пусть будет.
-        delete[] heap;
+        delete heap;
     }
 
     Heap<T>& operator=(const Heap<T>& other) {
-        delete[] heap;
-        size = other.size;
-        heap = new T[size];
+        delete heap;
+        heap = new MutableArraySequence<T>(*other.heap);
         chooseHeapType(other.getCompareType());
         int index = 0;
-        while (index < size) {
-            heap[index] = other.heap[index];
+        while (index < heap->getSize()) {
+            (*heap)[index] = (*other.heap)[index];
             ++index;
         }
         return *this;
     }
 
     int getSize() const {
-        return size;
+        return heap->getSize();
     }
 
     char* getCompareType() const {
@@ -191,27 +163,26 @@ public:
     }
 
     T& extractRoot() {
-        if (size == 0) throw std::out_of_range("The heap is empty");
-        return heap[0];
+        if (heap->getSize() == 0) throw std::out_of_range("The heap is empty");
+        return (*heap)[0];
     }
 
     void deleteRoot() {
-        if (size == 0) throw std::out_of_range("You can't extract max element because the heap is empty.\n");
-        heap[0] = heap[size - 1];
+        if (heap->getSize() == 0) throw std::out_of_range("You tried to decrease size of empty heap.\n");
+        (*heap)[0] = (*heap)[heap->getSize() - 1];
+        heap->popHead(heap->getSize() - 1);
         pushDown();
-        decreaseSize();
     }
 
     void insert(const T& item) {
-        increaseSize();
-        heap[size - 1] = item;
-        pushUp(size - 1);
+        heap->append(item);
+        pushUp(heap->getSize() - 1);
     }
 
     // возвращает индекс элемента в куче. Если такового не находится, возвращает -1
     int find(const T& item) const {
-        for (int i = 0; i < size; ++i) {
-            if (heap[i] == item) return i;
+        for (int i = 0; i < heap->getSize(); ++i) {
+            if ((*heap)[i] == item) return i;
         }
         return -1;
     }
@@ -227,8 +198,8 @@ public:
         int levelCapacityCurrent = 0; // текущая заполненность уровня поддерева, где рассматривается следующий элемент
 
         int index = 1;
-        while (subTreeIndex < size && index < subTreeSize) {
-            if (subTree[index++] != heap[subTreeIndex]) return false;
+        while (subTreeIndex < heap->getSize() && index < subTreeSize) {
+            if (subTree[index++] != (*heap)[subTreeIndex]) return false;
             ++levelCapacityCurrent;
             if (levelCapacityCurrent == levelCapacity) {
                 subTreeIndex = (subTreeIndex - levelCapacity + 1) * 2 + 1;
@@ -239,7 +210,7 @@ public:
             }
         }
 
-        if (subTreeIndex < size) return false; // случай, когда поддерево не содержит нижние элементы дерева
+        if (subTreeIndex < heap->getSize()) return false; // случай, когда поддерево не содержит нижние элементы дерева
         if (index < subTreeSize) return false; // случай, когда поддерево имеет элементы, которые не имеет дерево.
         return true;
     }
@@ -251,7 +222,7 @@ public:
         int subTreeSize = getSubTreeSize(rootIndex);
 
         Heap<T>* result = new Heap<T>(isMax, subTreeSize);
-        result->heap[0] = heap[rootIndex];
+        (*result->heap)[0] = (*heap)[rootIndex];
 
         createSubTree(result, rootIndex);
         return result;
@@ -259,21 +230,19 @@ public:
 
     Heap<T>* merge(const Heap<T>& other) {
         // кучи сливаются даже тогда, когда они макс/мин или мин/макс. Тип кучи = тип объекта
-        Heap<T>* result = new Heap<T>(isMax, size + other.size);
+        Heap<T>* result = new Heap<T>(isMax, heap->getSize() + other.getSize());
         int i = 0;
-        for (; i < size; ++i) {
-            result->heap[i] = heap[i];
+        for (; i < heap->getSize(); ++i) {
+            (*result->heap)[i] = (*heap)[i];
         }
-        result->size = size;
-        for (; i < size + other.size; ++i) {
-            result->heap[i] = other.heap[i - size];
+        for (; i < heap->getSize() + other.getSize(); ++i) {
+            (*result->heap)[i] = (*other.heap)[i - heap->getSize()];
             result->pushUp(i);
-            ++(result->size);
         }
         return result;
     }
 
     const T& get(int index) const {
-        return heap[index];
+        return (*heap)[index];
     }
 };
